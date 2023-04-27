@@ -1506,6 +1506,45 @@ class BertForNextSentencePrediction(BertPreTrainedModel):
             attentions=outputs.attentions,
         )
 
+def divide_no_nan(a, b):
+    """
+    Auxiliary funtion to handle divide by 0
+    """
+    div = a / b
+    div[div != div] = 0.0
+    div[div == float('inf')] = 0.0
+    return div
+
+#############################################################################
+# FORECASTING LOSSES
+#############################################################################
+
+def MAPELoss(y, y_hat, mask=None):
+    """MAPE Loss
+    Calculates Mean Absolute Percentage Error between
+    y and y_hat. MAPE measures the relative prediction
+    accuracy of a forecasting method by calculating the
+    percentual deviation of the prediction and the true
+    value at a given time and averages these devations
+    over the length of the series.
+    Parameters
+    ----------
+    y: tensor (batch_size, output_size)
+        actual values in torch tensor.
+    y_hat: tensor (batch_size, output_size)
+        predicted values in torch tensor.
+    mask: tensor (batch_size, output_size)
+        specifies date stamps per serie
+        to consider in loss
+    Returns
+    -------
+    mape:
+    Mean absolute percentage error.
+    """
+    mask = divide_no_nan(mask, t.abs(y))
+    mape = t.abs(y - y_hat) * mask
+    mape = t.mean(mape)
+    return mape
 
 @add_start_docstrings(
     """
@@ -1587,7 +1626,7 @@ class BertForSequenceClassification(BertPreTrainedModel):
                     self.config.problem_type = "multi_label_classification"
 
             if self.config.problem_type == "regression":
-                loss_fct = MSELoss()
+                loss_fct = MAPELoss()
                 if self.num_labels == 1:
                     loss = loss_fct(logits.squeeze(), labels.squeeze())
                 else:
